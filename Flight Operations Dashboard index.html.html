@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Airline Flight Operations Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet" />
+    <style>
+      body {
+        font-family: "Inter", sans-serif;
+        background-color: #0f172a; /* Slate 900 */
+        color: #f8fafc; /* Slate 50 */
+      }
+      .mono-num {
+        font-family: "JetBrains Mono", monospace;
+      }
+      /* Custom scrollbar for the table container */
+      .table-container::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      .table-container::-webkit-scrollbar-track {
+        background: #1e293b; /* Slate 800 */
+        border-radius: 4px;
+      }
+      .table-container::-webkit-scrollbar-thumb {
+        background: #475569; /* Slate 600 */
+        border-radius: 4px;
+      }
+      .table-container::-webkit-scrollbar-thumb:hover {
+        background: #64748b; /* Slate 500 */
+      }
+      @keyframes pulse-border {
+        0%,
+        100% {
+          border-color: rgba(239, 68, 68, 0.4);
+          background-color: rgba(69, 10, 10, 0.4);
+        }
+        50% {
+          border-color: rgba(239, 68, 68, 1);
+          background-color: rgba(69, 10, 10, 0.8);
+        }
+      }
+      .conflict-row {
+        animation: pulse-border 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+      }
+    </style>
+  </head>
+  <body class="min-h-screen flex flex-col p-4 md:p-6 lg:p-8">
+    <!-- Header & Summary Widgets -->
+    <header class="mb-8">
+      <div
+        class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
+        <div>
+          <h1
+            class="text-2xl md:text-3xl font-bold tracking-tight text-white flex items-center gap-3">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="28"
+              height="28"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="text-blue-500">
+              <path
+                d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.2-1.1.5l-1.3 2.6c-.2.4.1.9.6.8L9 11l-3.5 3.5-2.7-.6c-.4-.1-.8.2-1 .5l-1 2c-.2.4.1.9.6.8L6 17l4.2 4.6c.1.5.7.8 1.1.6l2-1c.4-.2.6-.6.5-1l-.6-2.7L16 13l2.8-6.2" />
+            </svg>
+            Flight Operations Center
+          </h1>
+          <p class="text-slate-400 text-sm mt-1">
+            Real-time scheduling, aircraft assignment, and conflict detection
+            system.
+          </p>
+        </div>
+        <div class="mt-4 md:mt-0 text-right">
+          <div class="text-sm text-slate-400">System Time (Local)</div>
+          <div id="clock" class="text-xl font-semibold mono-num text-blue-400">
+            00:00:00
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div
+          class="bg-slate-800 border border-slate-700 rounded-xl p-4 flex flex-col justify-center">
+          <span
+            class="text-slate-400 text-xs font-semibold uppercase tracking-wider"
+            >Total Flights (Today)</span
+          >
+          <span
+            id="stat-total"
+            class="text-3xl font-bold mt-1 mono-num text-white"
+            >0</span
+          >
+        </div>
+        <div
+          class="bg-slate-800 border border-slate-700 rounded-xl p-4 flex flex-col justify-center">
+          <span
+            class="text-slate-400 text-xs font-semibold uppercase tracking-wider"
+            >Active Delays</span
+          >
+          <span
+            id="stat-delayed"
+            class="text-3xl font-bold mt-1 mono-num text-amber-400"
+            >0</span
+          >
+        </div>
+        <div
+          class="bg-red-950/30 border border-red-900/50 rounded-xl p-4 flex flex-col justify-center relative overflow-hidden">
+          <div class="absolute inset-0 bg-red-500/10 animate-pulse"></div>
+          <span
+            class="text-red-400 text-xs font-semibold uppercase tracking-wider relative z-10"
+            >Critical Conflicts</span
+          >
+          <span
+            id="stat-conflicts"
+            class="text-3xl font-bold mt-1 mono-num text-red-500 relative z-10"
+            >0</span
+          >
+        </div>
+        <div
+          class="bg-slate-800 border border-slate-700 rounded-xl p-4 flex flex-col justify-center">
+          <span
+            class="text-slate-400 text-xs font-semibold uppercase tracking-wider"
+            >On-Time Performance</span
+          >
+          <span
+            id="stat-otp"
+            class="text-3xl font-bold mt-1 mono-num text-emerald-400"
+            >0%</span
+          >
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Data Table -->
+    <main
+      class="flex-grow bg-slate-800 border border-slate-700 rounded-xl overflow-hidden shadow-2xl flex flex-col">
+      <div
+        class="p-4 border-b border-slate-700 bg-slate-800 flex justify-between items-center">
+        <h2 class="font-semibold text-lg">Active Schedule Roster</h2>
+        <div class="flex gap-2">
+          <span class="flex items-center text-xs text-slate-400"
+            ><span class="w-3 h-3 rounded-full bg-emerald-500 mr-2"></span> On
+            Time</span
+          >
+          <span class="flex items-center text-xs text-slate-400 ml-3"
+            ><span class="w-3 h-3 rounded-full bg-amber-500 mr-2"></span>
+            Delayed</span
+          >
+          <span class="flex items-center text-xs text-slate-400 ml-3"
+            ><span
+              class="w-3 h-3 rounded-full bg-red-500 animate-pulse mr-2"></span>
+            Conflict</span
+          >
+        </div>
+      </div>
+
+      <div class="overflow-x-auto table-container flex-grow">
+        <table class="w-full text-left border-collapse whitespace-nowrap">
+          <thead class="bg-slate-900/80 sticky top-0 backdrop-blur-sm z-10">
+            <tr>
+              <th
+                class="p-4 text-xs font-medium text-slate-400 uppercase tracking-wider border-b border-slate-700">
+                Flight
+              </th>
+              <th
+                class="p-4 text-xs font-medium text-slate-400 uppercase tracking-wider border-b border-slate-700">
+                Aircraft
+              </th>
+              <th
+                class="p-4 text-xs font-medium text-slate-400 uppercase tracking-wider border-b border-slate-700">
+                Route
+              </th>
+              <th
+                class="p-4 text-xs font-medium text-slate-400 uppercase tracking-wider border-b border-slate-700">
+                Dep. Time
+              </th>
+              <th
+                class="p-4 text-xs font-medium text-slate-400 uppercase tracking-wider border-b border-slate-700">
+                Gate
+              </th>
+              <th
+                class="p-4 text-xs font-medium text-slate-400 uppercase tracking-wider border-b border-slate-700">
+                Status
+              </th>
+              <th
+                class="p-4 text-xs font-medium text-slate-400 uppercase tracking-wider border-b border-slate-700">
+                Remarks / Conflicts
+              </th>
+            </tr>
+          </thead>
+          <tbody id="flight-table-body" class="divide-y divide-slate-700/50">
+            <!-- Data rendered via JavaScript -->
+          </tbody>
+        </table>
+      </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="mt-6 text-center text-slate-500 text-xs">
+      <p>
+        Operational constraints and requirements referenced from project notes
+        in <span class="font-mono text-slate-400">34783.jpg</span> (CSE 326:
+        Internet Programming).
+      </p>
+    </footer>
+
+    <script>
+      // Mock Data Generation
+      const rawFlights = [
+        {
+          id: "FL101",
+          flightNo: "AI 204",
+          aircraft: "Boeing 777-300",
+          origin: "DEL",
+          dest: "JFK",
+          time: "10:00",
+          gate: "T3-G14",
+          status: "Boarding",
+          delay: 0,
+        },
+        {
+          id: "FL102",
+          flightNo: "IN 451",
+          aircraft: "Airbus A320neo",
+          origin: "DEL",
+          dest: "BOM",
+          time: "10:15",
+          gate: "T2-G08",
+          status: "On Time",
+          delay: 0,
+        },
+        {
+          id: "FL103",
+          flightNo: "UK 902",
+          aircraft: "Airbus A321",
+          origin: "DEL",
+          dest: "BLR",
+          time: "10:45",
+          gate: "T3-G21",
+          status: "Delayed",
+          delay: 45,
+        },
+        {
+          id: "FL104",
+          flightNo: "BA 256",
+          aircraft: "Boeing 787-9",
+          origin: "DEL",
+          dest: "LHR",
+          time: "11:30",
+          gate: "T3-G18",
+          status: "Scheduled",
+          delay: 0,
+        },
+
+        // --- CONFLICT SCENARIO INJECTION ---
+        // Two flights scheduled at the exact same gate at the exact same time
+        {
+          id: "FL105",
+          flightNo: "EK 511",
+          aircraft: "Airbus A380",
+          origin: "DEL",
+          dest: "DXB",
+          time: "12:15",
+          gate: "T3-G22",
+          status: "Scheduled",
+          delay: 0,
+        },
+        {
+          id: "FL106",
+          flightNo: "QR 233",
+          aircraft: "Boeing 777-200",
+          origin: "DEL",
+          dest: "DOH",
+          time: "12:15",
+          gate: "T3-G22",
+          status: "Scheduled",
+          delay: 0,
+        },
+        // -----------------------------------
+
+        {
+          id: "FL107",
+          flightNo: "SG 818",
+          aircraft: "Boeing 737 MAX",
+          origin: "DEL",
+          dest: "HYD",
+          time: "12:40",
+          gate: "T1-G04",
+          status: "On Time",
+          delay: 0,
+        },
+        {
+          id: "FL108",
+          flightNo: "AI 302",
+          aircraft: "Airbus A350-900",
+          origin: "DEL",
+          dest: "SYD",
+          time: "13:00",
+          gate: "T3-G15",
+          status: "Delayed",
+          delay: 120,
+        },
+        {
+          id: "FL109",
+          flightNo: "IN 612",
+          aircraft: "Airbus A320",
+          origin: "DEL",
+          dest: "CCU",
+          time: "13:15",
+          gate: "T2-G10",
+          status: "On Time",
+          delay: 0,
+        },
+        {
+          id: "FL110",
+          flightNo: "UA 802",
+          aircraft: "Boeing 787-10",
+          origin: "DEL",
+          dest: "EWR",
+          time: "14:00",
+          gate: "T3-G19",
+          status: "Scheduled",
+          delay: 0,
+        },
+      ];
+
+      // System Clock Update
+      function updateClock() {
+        const now = new Date();
+        const timeString = now.toLocaleTimeString("en-US", {
+          hour12: false,
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        });
+        document.getElementById("clock").textContent = timeString;
+      }
+      setInterval(updateClock, 1000);
+      updateClock();
+
+      // Conflict Detection Algorithm
+      // Flags flights that share the same gate and have overlapping departure times (exact match for this simulation)
+      function analyzeFlights(flights) {
+        const processedFlights = [...flights];
+
+        for (let i = 0; i < processedFlights.length; i++) {
+          processedFlights[i].conflicts = [];
+          for (let j = 0; j < processedFlights.length; j++) {
+            if (i !== j) {
+              const flightA = processedFlights[i];
+              const flightB = processedFlights[j];
+
+              // Condition for Conflict: Same Gate AND Same Time
+              if (
+                flightA.gate === flightB.gate &&
+                flightA.time === flightB.time
+              ) {
+                flightA.conflicts.push(
+                  `Gate conflict with ${flightB.flightNo}`,
+                );
+              }
+            }
+          }
+        }
+        return processedFlights;
+      }
+
+      // Render Table and Dashboard Stats
+      function renderDashboard() {
+        const analyzedData = analyzeFlights(rawFlights);
+        const tbody = document.getElementById("flight-table-body");
+        tbody.innerHTML = ""; // clear
+
+        let delayedCount = 0;
+        let conflictCount = 0;
+        let onTimeCount = 0;
+
+        analyzedData.forEach((flight) => {
+          const hasConflict = flight.conflicts.length > 0;
+
+          // Track Stats
+          if (hasConflict) conflictCount++; // Counting rows with conflicts
+          if (flight.delay > 0) delayedCount++;
+          if (
+            flight.status === "On Time" ||
+            flight.status === "Boarding" ||
+            (flight.status === "Scheduled" &&
+              flight.delay === 0 &&
+              !hasConflict)
+          )
+            onTimeCount++;
+
+          const tr = document.createElement("tr");
+          tr.className = `hover:bg-slate-700/50 transition-colors ${hasConflict ? "conflict-row border-y border-red-500" : ""}`;
+
+          // Status Badge Logic
+          let statusClass = "bg-slate-900 text-slate-300 border-slate-700";
+          if (flight.status === "On Time")
+            statusClass =
+              "bg-emerald-900/50 text-emerald-400 border-emerald-800";
+          if (flight.status === "Boarding")
+            statusClass = "bg-blue-900/50 text-blue-400 border-blue-800";
+          if (flight.status === "Delayed")
+            statusClass = "bg-amber-900/50 text-amber-400 border-amber-800";
+          if (hasConflict)
+            statusClass =
+              "bg-red-900/80 text-red-100 border-red-500 animate-pulse";
+
+          const statusLabel = hasConflict ? "GND CONFLICT" : flight.status;
+
+          // Remarks Logic
+          let remarksHtml = `<span class="text-slate-500">-</span>`;
+          if (hasConflict) {
+            remarksHtml = `<div class="flex items-center text-red-400 font-medium">
+                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                        ${flight.conflicts.join(", ")}
+                    </div>`;
+          } else if (flight.delay > 0) {
+            remarksHtml = `<span class="text-amber-400">Est. +${flight.delay} mins</span>`;
+          }
+
+          tr.innerHTML = `
+                    <td class="p-4 font-bold text-white mono-num">${flight.flightNo}</td>
+                    <td class="p-4 text-slate-300 text-sm">${flight.aircraft}</td>
+                    <td class="p-4 text-slate-300 font-medium">
+                        ${flight.origin} 
+                        <span class="text-slate-500 mx-1">→</span> 
+                        ${flight.dest}
+                    </td>
+                    <td class="p-4 text-slate-300 mono-num">${flight.time}</td>
+                    <td class="p-4">
+                        <span class="px-2 py-1 rounded bg-slate-700/50 font-mono text-sm border border-slate-600 ${hasConflict ? "border-red-500 text-red-400 bg-red-950" : "text-slate-200"}">
+                            ${flight.gate}
+                        </span>
+                    </td>
+                    <td class="p-4">
+                        <span class="px-2.5 py-1 rounded-full text-xs font-semibold border ${statusClass}">
+                            ${statusLabel}
+                        </span>
+                    </td>
+                    <td class="p-4 text-sm">
+                        ${remarksHtml}
+                    </td>
+                `;
+          tbody.appendChild(tr);
+        });
+
+        // Update Widgets
+        document.getElementById("stat-total").textContent = analyzedData.length;
+        document.getElementById("stat-delayed").textContent = delayedCount;
+        // Divide by 2 because 2 flights share 1 conflict event, but showing impacted flights is better for ops
+        document.getElementById("stat-conflicts").textContent = conflictCount;
+
+        const otpPercent = Math.round(
+          (onTimeCount / analyzedData.length) * 100,
+        );
+        document.getElementById("stat-otp").textContent = `${otpPercent}%`;
+
+        // Adjust OTP Color based on value
+        const otpElement = document.getElementById("stat-otp");
+        otpElement.className = `text-3xl font-bold mt-1 mono-num ${otpPercent >= 80 ? "text-emerald-400" : otpPercent >= 60 ? "text-amber-400" : "text-red-400"}`;
+      }
+
+      // Initial Render
+      document.addEventListener("DOMContentLoaded", renderDashboard);
+    </script>
+  </body>
+</html>
